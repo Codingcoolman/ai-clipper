@@ -9,29 +9,71 @@ import werkzeug.utils
 import subprocess
 import logging
 import secrets
+import sys
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout  # Ensure logs go to stdout for Render
+)
 logger = logging.getLogger(__name__)
 
 # Local imports
-from src.downloader import download_youtube_video, save_uploaded_video
-from src.transcriber import transcribe_video
-from src.clip_selector import ClipSelector
-from src.video_processor import VideoProcessor, ClipRequest
-from src.caption_burner import CaptionStyle
+try:
+    from src.downloader import download_youtube_video, save_uploaded_video
+    from src.transcriber import transcribe_video
+    from src.clip_selector import ClipSelector
+    from src.video_processor import VideoProcessor, ClipRequest
+    from src.caption_burner import CaptionStyle
+    logger.info("Successfully imported all local modules")
+except Exception as e:
+    logger.error(f"Error importing local modules: {str(e)}")
+    raise
 
 app = Flask(__name__)
-
-# Remove basic CORS setup since we're handling it in run.py
-app.secret_key = secrets.token_hex(16)  # For session management
+app.secret_key = secrets.token_hex(16)
 
 # Add startup status tracking
 startup_status = {
     "ready": False,
     "message": "Server is starting...",
-    "start_time": time.time()
+    "start_time": time.time(),
+    "errors": []
 }
+
+def initialize_app():
+    """Initialize application components"""
+    try:
+        logger.info("Starting application initialization...")
+        
+        # Ensure output directory exists
+        output_dir = os.path.abspath('output')
+        os.makedirs(output_dir, exist_ok=True)
+        logger.info(f"Output directory ensured at {output_dir}")
+        
+        # Initialize VideoProcessor (or any other components)
+        global video_processor
+        video_processor = VideoProcessor()
+        logger.info("VideoProcessor initialized")
+        
+        # Mark as ready
+        startup_status["ready"] = True
+        startup_status["message"] = "Server is ready"
+        logger.info("Application initialization complete")
+        
+    except Exception as e:
+        error_msg = f"Error during initialization: {str(e)}"
+        logger.error(error_msg)
+        startup_status["errors"].append(error_msg)
+        startup_status["message"] = error_msg
+        raise
+
+# Start initialization in the main thread
+try:
+    initialize_app()
+except Exception as e:
+    logger.error(f"Failed to initialize application: {str(e)}")
 
 def add_cors_headers(response):
     """Add CORS headers to all responses"""
@@ -42,20 +84,22 @@ def add_cors_headers(response):
     response.headers['Access-Control-Max-Age'] = '3600'
     return response
 
-@app.after_request
-def after_request(response):
-    """Add CORS headers after each request"""
-    return add_cors_headers(response)
-
 @app.route('/health')
 def health_check():
-    """Simple health check endpoint"""
+    """Enhanced health check endpoint"""
     uptime = time.time() - startup_status["start_time"]
-    response = jsonify({
+    status_info = {
         "status": "ready" if startup_status["ready"] else "starting",
         "message": startup_status["message"],
-        "uptime": f"{uptime:.2f} seconds"
-    })
+        "uptime": f"{uptime:.2f} seconds",
+        "errors": startup_status["errors"],
+        "environment": {
+            "python_version": sys.version,
+            "working_directory": os.getcwd(),
+            "output_directory": os.path.abspath('output')
+        }
+    }
+    response = jsonify(status_info)
     return add_cors_headers(response)
 
 @app.route('/')
