@@ -24,16 +24,7 @@ from src.caption_burner import CaptionStyle
 app = Flask(__name__)
 
 # Configure CORS with specific settings
-CORS(app, resources={
-    r"/*": {
-        "origins": ["*"],  # Allow all origins temporarily for testing
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["Content-Range", "X-Content-Range"],
-        "supports_credentials": True,
-        "max_age": 3600
-    }
-})
+CORS(app)  # Basic CORS setup, detailed config is in run.py
 
 app.secret_key = secrets.token_hex(16)  # For session management
 
