@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 from flask_cors import CORS
+from flask import current_app
 
 # Configure logging
 logging.basicConfig(
@@ -17,8 +18,8 @@ sys.path.append(current_dir)
 logger.info(f"Added {current_dir} to PYTHONPATH")
 
 try:
-    from src.app import app
-    logger.info("Successfully imported Flask app")
+    from src.app import app, task_manager
+    logger.info("Successfully imported Flask app and task manager")
 except Exception as e:
     logger.error(f"Failed to import Flask app: {str(e)}")
     raise
@@ -56,6 +57,11 @@ try:
 except Exception as e:
     logger.error(f"Failed to set template/static folders: {str(e)}")
     raise
+
+# Ensure the application context is available
+app_context = app.app_context()
+app_context.push()
+logger.info("Application context pushed")
 
 if __name__ == '__main__':
     try:
