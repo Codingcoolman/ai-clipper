@@ -3,7 +3,7 @@ import time
 import threading
 from pathlib import Path
 from typing import Dict, Optional, List, Tuple
-from flask import Flask, request, jsonify, send_from_directory, render_template, session, current_app
+from flask import Flask, request, jsonify, send_from_directory, render_template, session, current_app, copy_current_request_context
 from flask_cors import CORS
 import werkzeug.utils
 import subprocess
@@ -737,12 +737,8 @@ def get_progress(task_id):
         return add_cors_headers(response)
 
     try:
-        progress = task_progress.get(task_id, {
-            'status': 'not_found',
-            'progress': 0,
-            'message': 'Task not found'
-        })
-        
+        logger.info(f"Getting progress for task {task_id}")
+        progress = task_manager.get_task(task_id)
         response = jsonify(progress)
         return add_cors_headers(response)
     except Exception as e:
@@ -761,21 +757,40 @@ def process_video():
         return add_cors_headers(response)
     
     try:
+        # Create task first
         task_id = task_manager.create_task()
+        logger.info(f"Created new task: {task_id}")
         
-        # Start processing in a background thread
-        def process_in_background():
+        # Get request data before starting the thread
+        request_data = request.get_json() if request.is_json else request.form.to_dict()
+        files = request.files if request.files else None
+        
+        @copy_current_request_context
+        def process_in_background(task_id, data, files):
             try:
-                # Your existing processing code here
-                task_manager.update_task(task_id, 'processing', 0, 'Starting processing')
-                # ... rest of your processing code ...
+                with app.app_context():
+                    logger.info(f"Starting background processing for task {task_id}")
+                    task_manager.update_task(task_id, 'processing', 0, 'Starting video processing')
+                    
+                    # Your processing code here...
+                    # Example:
+                    task_manager.update_task(task_id, 'processing', 50, 'Processing video...')
+                    time.sleep(2)  # Simulate work
+                    task_manager.update_task(task_id, 'completed', 100, 'Processing complete')
+                    
             except Exception as e:
-                logger.error(f"Error processing task {task_id}: {str(e)}")
+                logger.error(f"Error in background task {task_id}: {str(e)}")
                 task_manager.update_task(task_id, 'error', message=str(e))
         
-        thread = threading.Thread(target=process_in_background)
+        # Start the background thread with the data
+        thread = threading.Thread(
+            target=process_in_background,
+            args=(task_id, request_data, files)
+        )
+        thread.daemon = True
         thread.start()
         
+        logger.info(f"Started background thread for task {task_id}")
         response = jsonify({'task_id': task_id})
         return add_cors_headers(response)
         
@@ -873,6 +888,7 @@ def get_video_length(video_path: str) -> float:
 
 @app.errorhandler(500)
 def internal_error(error):
+    logger.error(f"Internal server error: {str(error)}")
     response = jsonify({
         'status': 'error',
         'message': 'Internal server error',
@@ -882,6 +898,7 @@ def internal_error(error):
 
 @app.errorhandler(404)
 def not_found_error(error):
+    logger.error(f"Not found error: {str(error)}")
     response = jsonify({
         'status': 'error',
         'message': 'Not found',
