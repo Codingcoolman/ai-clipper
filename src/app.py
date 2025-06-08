@@ -23,9 +23,7 @@ from src.caption_burner import CaptionStyle
 
 app = Flask(__name__)
 
-# Configure CORS with specific settings
-CORS(app)  # Basic CORS setup, detailed config is in run.py
-
+# Remove basic CORS setup since we're handling it in run.py
 app.secret_key = secrets.token_hex(16)  # For session management
 
 # Add startup status tracking
@@ -35,15 +33,29 @@ startup_status = {
     "start_time": time.time()
 }
 
+def add_cors_headers(response):
+    """Add CORS headers to all responses"""
+    response.headers['Access-Control-Allow-Origin'] = 'https://init-12295.web.app'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    return response
+
+@app.after_request
+def after_request(response):
+    """Add CORS headers after each request"""
+    return add_cors_headers(response)
+
 @app.route('/health')
 def health_check():
     """Simple health check endpoint"""
     uptime = time.time() - startup_status["start_time"]
-    return jsonify({
+    response = jsonify({
         "status": "ready" if startup_status["ready"] else "starting",
         "message": startup_status["message"],
         "uptime": f"{uptime:.2f} seconds"
     })
+    return add_cors_headers(response)
 
 @app.route('/')
 def index():
@@ -688,9 +700,13 @@ def get_progress(task_id):
             'eta': task_data['eta']
         })
 
-@app.route('/process', methods=['POST'])
+@app.route('/process', methods=['POST', 'OPTIONS'])
 def process_video():
-    """Process a video file or YouTube URL"""
+    """Process video endpoint"""
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        return add_cors_headers(response)
+        
     try:
         task_id = str(time.time())  # Simple task ID generation
         
