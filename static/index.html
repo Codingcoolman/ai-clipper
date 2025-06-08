@@ -7,9 +7,26 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=YOUR-CLIENT-ID"></script>
     <!-- Firebase SDK -->
-    <script type="module" src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"></script>
-    <script type="module" src="https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js"></script>
-    <script type="module" src="/js/firebase-config.js"></script>
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+        import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js';
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAps0-1yspdOrAJyOJuZ5wKU2zlLzwz-LY",
+            authDomain: "init-12295.firebaseapp.com",
+            projectId: "init-12295",
+            storageBucket: "init-12295.firebasestorage.app",
+            messagingSenderId: "50130683900",
+            appId: "1:50130683900:web:96a2becd1d7b24927e1479",
+            measurementId: "G-2DLJ39N7RV"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+    </script>
     <style>
         @keyframes spin {
             to { transform: rotate(360deg); }
@@ -115,7 +132,7 @@
 
     <script>
         // API endpoint configuration
-        const API_BASE_URL = 'https://yourusername.pythonanywhere.com';  // We'll update this once we have your PythonAnywhere account
+        const API_BASE_URL = 'https://ai-clipper.onrender.com';
 
         let currentTaskId = null;
         let pollInterval = null;
@@ -210,6 +227,7 @@
                     }
                 } catch (error) {
                     console.error('Error polling progress:', error);
+                    document.getElementById('statusText').textContent = 'Error: ' + error.message;
                 }
             }, 1000);
         }
@@ -251,6 +269,10 @@
                     return;
                 }
 
+                // Show loading state
+                processBtn.disabled = true;
+                processBtn.textContent = 'Processing...';
+                
                 const formData = new FormData();
                 if (url) {
                     formData.append('url', url);
@@ -259,21 +281,31 @@
                 }
 
                 try {
+                    console.log('Sending request to:', `${API_BASE_URL}/process`);
                     const response = await fetch(`${API_BASE_URL}/process`, {
                         method: 'POST',
                         body: formData
                     });
 
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
                     const data = await response.json();
+                    console.log('Response data:', data);
+                    
                     if (data.error) {
-                        alert(data.error);
-                        return;
+                        throw new Error(data.error);
                     }
 
                     startProgressPolling(data.task_id);
                 } catch (error) {
                     console.error('Error processing video:', error);
-                    alert('Error processing video. Please try again.');
+                    alert('Error processing video: ' + error.message);
+                } finally {
+                    // Reset button state
+                    processBtn.disabled = false;
+                    processBtn.textContent = 'Process Video';
                 }
             });
 
@@ -287,6 +319,11 @@
             resultsContainer.innerHTML = '';
             resultsContainer.classList.remove('hidden');
 
+            if (!results || results.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-red-500">No results were returned from the server.</p>';
+                return;
+            }
+
             results.forEach((clip, index) => {
                 const clipElement = document.createElement('div');
                 clipElement.className = 'bg-gray-50 p-4 rounded-lg';
@@ -296,7 +333,7 @@
                         <source src="${clip.url}" type="video/mp4">
                         Your browser does not support the video tag.
                     </video>
-                    <p class="text-sm text-gray-600">${clip.description}</p>
+                    <p class="text-sm text-gray-600">${clip.description || 'No description available'}</p>
                     <a href="${clip.url}" download class="text-blue-500 hover:text-blue-600 text-sm">Download Clip</a>
                 `;
                 resultsContainer.appendChild(clipElement);

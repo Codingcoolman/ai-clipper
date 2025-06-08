@@ -22,8 +22,63 @@ from src.video_processor import VideoProcessor, ClipRequest
 from src.caption_burner import CaptionStyle
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+
+# Configure CORS with specific settings
+CORS(app, resources={
+    r"/*": {
+        "origins": ["*"],  # Allow all origins temporarily for testing
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["Content-Range", "X-Content-Range"],
+        "supports_credentials": True,
+        "max_age": 3600
+    }
+})
+
 app.secret_key = secrets.token_hex(16)  # For session management
+
+# Add startup status tracking
+startup_status = {
+    "ready": False,
+    "message": "Server is starting...",
+    "start_time": time.time()
+}
+
+@app.route('/health')
+def health_check():
+    """Simple health check endpoint"""
+    uptime = time.time() - startup_status["start_time"]
+    return jsonify({
+        "status": "ready" if startup_status["ready"] else "starting",
+        "message": startup_status["message"],
+        "uptime": f"{uptime:.2f} seconds"
+    })
+
+@app.route('/')
+def index():
+    """Root endpoint"""
+    return jsonify({
+        "status": "ok",
+        "message": "AI Clipper API is running",
+        "ready": startup_status["ready"]
+    })
+
+# Initialize models in a background thread
+def init_models():
+    try:
+        logger.info("Initializing models...")
+        global clip_selector
+        clip_selector = ClipSelector()
+        clip_selector.wait_for_models(timeout=60)
+        startup_status["ready"] = True
+        startup_status["message"] = "Server is ready"
+        logger.info("Models initialized successfully")
+    except Exception as e:
+        startup_status["message"] = f"Error initializing models: {str(e)}"
+        logger.error(f"Error initializing models: {str(e)}")
+
+# Start model initialization in background
+threading.Thread(target=init_models).start()
 
 # Initialize clip selector
 clip_selector = ClipSelector()
@@ -250,10 +305,6 @@ def update_task_results(task_id: str, results: dict):
     with task_lock:
         logger.info(f"Storing results for task {task_id}: {results}")
         task_results[task_id] = results
-
-@app.route('/')
-def index():
-    return render_template('index.html')
 
 @app.route('/models-status')
 def models_status():
