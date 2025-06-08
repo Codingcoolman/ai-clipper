@@ -1,0 +1,18 @@
+{
+  "download": {
+    "per_minute": 0.1876554320151975,
+    "base_time": 2
+  },
+  "transcribe": {
+    "per_minute": 4.62617490474449,
+    "base_time": 5
+  },
+  "clip_selection": {
+    "per_minute": -0.00019014666443056827,
+    "base_time": 3
+  },
+  "clip_creation": {
+    "per_clip": 15,
+    "base_time": 2
+  }
+}

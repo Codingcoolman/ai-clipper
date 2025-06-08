@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Clipper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=YOUR-CLIENT-ID"></script>
+    <!-- Firebase SDK -->
+    <script type="module" src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js"></script>
+    <script type="module" src="/static/js/firebase-config.js"></script>
+    <style>
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin-custom {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-2xl mx-auto">
+            <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">AI Clipper</h1>
+            
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <!-- Model loading status -->
+                <div id="modelStatus" class="mb-4 text-center">
+                    <div class="animate-spin inline-block w-6 h-6 border-[3px] border-current border-t-transparent text-blue-500 rounded-full">
+                        <span class="sr-only">Loading...</span>
+                    </div>
+                    <p class="text-sm text-gray-600">Loading AI models...</p>
+                </div>
+
+                <!-- Input Type Selection -->
+                <div class="flex space-x-4 mb-6">
+                    <button id="urlInputBtn" class="flex-1 py-2 px-4 rounded-md bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
+                        YouTube URL
+                    </button>
+                    <button id="fileInputBtn" class="flex-1 py-2 px-4 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50">
+                        Upload Video
+                    </button>
+                </div>
+
+                <!-- URL Input Section -->
+                <div id="urlInputSection" class="mb-6">
+                    <label for="url" class="block text-sm font-medium text-gray-700 mb-2">YouTube URL</label>
+                    <input type="text" id="url" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://www.youtube.com/watch?v=...">
+                </div>
+
+                <!-- File Input Section -->
+                <div id="fileInputSection" class="mb-6 hidden">
+                    <label for="videoFile" class="block text-sm font-medium text-gray-700 mb-2">Video File</label>
+                    <input type="file" id="videoFile" class="w-full" accept="video/*">
+                </div>
+
+                <!-- Process Button -->
+                <button id="processBtn" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 mb-4">
+                    Process Video
+                </button>
+
+                <!-- Progress and Ad Section -->
+                <div id="progressAndAds" class="hidden">
+                    <!-- Progress Status Box -->
+                    <div id="progressStatus" class="mb-6 bg-gray-800 text-white p-4 rounded-lg">
+                        <div class="flex items-center space-x-3 mb-2">
+                            <svg class="animate-spin-custom h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span id="statusText" class="text-sm font-medium">Your project is currently processing</span>
+                        </div>
+                        <div class="text-sm text-gray-300">
+                            <span id="progressText">0</span>% (<span id="etaText">Estimating...</span>)
+                        </div>
+                    </div>
+
+                    <!-- Ad Section -->
+                    <div id="adSection" class="mb-6">
+                        <div class="text-center mb-4">
+                            <h3 class="text-lg font-semibold text-gray-700">Watch ads while we process your video</h3>
+                            <p class="text-sm text-gray-600">Complete 3 ads to unlock your clips instantly when they're ready</p>
+                        </div>
+                        
+                        <!-- Ad Progress -->
+                        <div class="flex justify-between items-center mb-4">
+                            <div class="flex space-x-2">
+                                <div id="adDot1" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                                <div id="adDot2" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                                <div id="adDot3" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                            </div>
+                            <span id="adProgress" class="text-sm text-gray-600">0/3 ads completed</span>
+                        </div>
+
+                        <!-- Ad Container -->
+                        <div id="adContainer" class="w-full bg-gray-100 rounded-lg p-4 min-h-[250px] flex items-center justify-center">
+                            <ins class="adsbygoogle"
+                                style="display:block"
+                                data-ad-client="YOUR-CLIENT-ID"
+                                data-ad-slot="YOUR-AD-SLOT"
+                                data-ad-format="auto"
+                                data-full-width-responsive="true"></ins>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Section -->
+                <div id="results" class="mt-4 space-y-4 hidden">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTaskId = null;
+        let pollInterval = null;
+        let currentAdNumber = 0;
+        let adsCompleted = false;
+
+        // Initialize AdSense ads
+        function loadAd() {
+            (adsbygoogle = window.adsbygoogle || []).push({});
+        }
+
+        // Update ad progress UI
+        function updateAdProgress(completedAds) {
+            const dots = [
+                document.getElementById('adDot1'),
+                document.getElementById('adDot2'),
+                document.getElementById('adDot3')
+            ];
+            
+            dots.forEach((dot, index) => {
+                if (index < completedAds) {
+                    dot.classList.remove('bg-gray-300');
+                    dot.classList.add('bg-green-500');
+                }
+            });
+            
+            document.getElementById('adProgress').textContent = `${completedAds}/3 ads completed`;
+        }
+
+        // Handle ad completion
+        async function completeAd() {
+            try {
+                const response = await fetch('/api/ad/complete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        task_id: currentTaskId,
+                        ad_id: currentAdNumber + 1
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    console.error('Error completing ad:', data.error);
+                    return;
+                }
+                
+                currentAdNumber = data.ads_completed;
+                updateAdProgress(currentAdNumber);
+                adsCompleted = data.verified;
+                
+                // Load next ad if not all completed
+                if (!adsCompleted) {
+                    loadAd();
+                }
+                
+            } catch (error) {
+                console.error('Error marking ad as complete:', error);
+            }
+        }
+
+        // Progress polling functionality
+        async function startProgressPolling(taskId) {
+            currentTaskId = taskId;
+            
+            // Show progress and ad section
+            document.getElementById('progressAndAds').classList.remove('hidden');
+            
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+
+            // Load first ad
+            loadAd();
+
+            pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/progress/${taskId}`);
+                    const data = await response.json();
+                    
+                    // Update progress display
+                    document.getElementById('statusText').textContent = data.status;
+                    document.getElementById('progressText').textContent = Math.round(data.total_progress || 0);
+                    document.getElementById('etaText').textContent = data.eta || 'Estimating...';
+
+                    // Check if processing is complete
+                    const isComplete = data.status === "Processing complete!";
+                    const hasError = data.status.toLowerCase().includes('error');
+                    
+                    if (isComplete || hasError) {
+                        clearInterval(pollInterval);
+                        
+                        // Reset button state
+                        const processBtn = document.getElementById('processBtn');
+                        processBtn.disabled = false;
+                        processBtn.innerHTML = 'Process Video';
+                        
+                        if (isComplete) {
+                            // Hide progress after a delay
+                            setTimeout(() => {
+                                document.getElementById('progressStatus').classList.add('hidden');
+                            }, 2000);
+                            
+                            // If ads are completed, show results immediately
+                            if (adsCompleted) {
+                                showResults(taskId);
+                            } else {
+                                // Keep showing ads until completed
+                                document.getElementById('adSection').classList.remove('hidden');
+                            }
+                        } else if (hasError) {
+                            showError(data.status);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error polling progress:', error);
+                }
+            }, 1000);
+        }
+
+        // Show results after verification
+        async function showResults(taskId) {
+            try {
+                const resultsResponse = await fetch(`/results/${taskId}`);
+                const resultsData = await resultsResponse.json();
+                
+                if (resultsData.clips && resultsData.clips.length > 0) {
+                    displayResults(resultsData.clips);
+                } else {
+                    showError('No clips were generated. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error fetching results:', error);
+                showError('Error loading results: ' + error.message);
+            }
+        }
+
+        // Show error message
+        function showError(message) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.innerHTML = `
+                <div class="bg-red-50 border-l-4 border-red-400 p-4">
+                    <p class="text-red-700">${message}</p>
+                </div>
+            `;
+        }
+
+        // Process video function
+        async function processVideo() {
+            const isUrlInput = !urlInputSection.classList.contains('hidden');
+            const url = document.getElementById('url').value;
+            const videoFile = document.getElementById('videoFile').files[0];
+            const processBtn = document.getElementById('processBtn');
+            
+            if (isUrlInput && !url) {
+                alert('Please enter a YouTube URL');
+                return;
+            }
+            if (!isUrlInput && !videoFile) {
+                alert('Please select a video file');
+                return;
+            }
+
+            try {
+                // Reset ad state
+                currentAdNumber = 0;
+                adsCompleted = false;
+                updateAdProgress(0);
+
+                // Show progress and ad section
+                document.getElementById('progressAndAds').classList.remove('hidden');
+                document.getElementById('results').classList.add('hidden');
+
+                // Disable button and show loading state
+                processBtn.disabled = true;
+                processBtn.innerHTML = `
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                `;
+
+                const formData = new FormData();
+                const data = {
+                    transcribe: true,
+                    num_clips: 3,
+                    quality: 'high'
+                };
+                
+                let endpoint;
+                let requestBody;
+                let headers = {};
+                
+                if (isUrlInput) {
+                    endpoint = '/download';
+                    data.url = url;
+                    requestBody = JSON.stringify(data);
+                    headers['Content-Type'] = 'application/json';
+                } else {
+                    endpoint = '/upload';
+                    formData.append('video', videoFile);
+                    formData.append('transcribe', 'true');
+                    formData.append('num_clips', '3');
+                    formData.append('quality', 'high');
+                    requestBody = formData;
+                }
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: headers,
+                    body: requestBody
+                });
+
+                const responseData = await response.json();
+                if (responseData.error) {
+                    throw new Error(responseData.error);
+                }
+
+                // Start progress polling if we have a task ID
+                if (responseData.task_id) {
+                    startProgressPolling(responseData.task_id);
+                }
+
+            } catch (error) {
+                showError('Error: ' + error.message);
+                
+                // Reset button state
+                processBtn.disabled = false;
+                processBtn.innerHTML = 'Process Video';
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('processBtn').addEventListener('click', processVideo);
+
+        // Input type selection
+        const urlInputBtn = document.getElementById('urlInputBtn');
+        const fileInputBtn = document.getElementById('fileInputBtn');
+        const urlInputSection = document.getElementById('urlInputSection');
+        const fileInputSection = document.getElementById('fileInputSection');
+
+        urlInputBtn.addEventListener('click', () => {
+            urlInputBtn.classList.add('bg-blue-500', 'text-white');
+            urlInputBtn.classList.remove('bg-gray-200', 'text-gray-700');
+            fileInputBtn.classList.add('bg-gray-200', 'text-gray-700');
+            fileInputBtn.classList.remove('bg-blue-500', 'text-white');
+            urlInputSection.classList.remove('hidden');
+            fileInputSection.classList.add('hidden');
+        });
+
+        fileInputBtn.addEventListener('click', () => {
+            fileInputBtn.classList.add('bg-blue-500', 'text-white');
+            fileInputBtn.classList.remove('bg-gray-200', 'text-gray-700');
+            urlInputBtn.classList.add('bg-gray-200', 'text-gray-700');
+            urlInputBtn.classList.remove('bg-blue-500', 'text-white');
+            fileInputSection.classList.remove('hidden');
+            urlInputSection.classList.add('hidden');
+        });
+
+        // Check model status on load
+        async function checkModelStatus() {
+            try {
+                const response = await fetch('/models-status');
+                const data = await response.json();
+                
+                if (data.loaded) {
+                    modelStatus.innerHTML = `
+                        <div class="text-green-500 flex items-center justify-center">
+                            <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <p class="text-sm">AI models loaded successfully</p>
+                        </div>
+                    `;
+                } else {
+                    setTimeout(checkModelStatus, 5000);
+                }
+            } catch (error) {
+                console.error('Error checking model status:', error);
+                setTimeout(checkModelStatus, 5000);
+            }
+        }
+
+        checkModelStatus();
+
+        function displayResults(clips) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+            
+            clips.forEach((clip, index) => {
+                const clipDiv = document.createElement('div');
+                clipDiv.className = 'mb-8 p-6 bg-white rounded-lg shadow-md';
+                
+                // Add clip number
+                const clipTitle = document.createElement('h3');
+                clipTitle.className = 'text-xl font-semibold mb-2';
+                clipTitle.textContent = `Clip ${index + 1}`;
+                
+                // Add duration
+                const duration = document.createElement('p');
+                duration.className = 'text-gray-600 mb-2';
+                duration.textContent = `Duration: ${Math.round(clip.duration)}s`;
+                
+                // Add video preview
+                const video = document.createElement('video');
+                video.className = 'w-full mb-4 rounded-lg';
+                video.controls = true;
+                video.preload = 'metadata';
+                video.src = `/output/clips/${encodeURIComponent(clip.file)}`;
+                
+                // Add text if available
+                let textElement = '';
+                if (clip.text) {
+                    textElement = document.createElement('p');
+                    textElement.className = 'text-gray-700 mb-4';
+                    textElement.textContent = `Text: ${clip.text}`;
+                }
+                
+                // Add download button
+                const downloadBtn = document.createElement('a');
+                downloadBtn.href = `/output/clips/${encodeURIComponent(clip.file)}`;
+                downloadBtn.download = clip.file;
+                downloadBtn.className = 'inline-block px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors';
+                downloadBtn.textContent = 'Download Clip';
+                
+                // Assemble the clip div
+                clipDiv.appendChild(clipTitle);
+                clipDiv.appendChild(duration);
+                clipDiv.appendChild(video);
+                if (textElement) clipDiv.appendChild(textElement);
+                clipDiv.appendChild(downloadBtn);
+                
+                resultsDiv.appendChild(clipDiv);
+            });
+            
+            // Show results section
+            resultsDiv.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html> 
