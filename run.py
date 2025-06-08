@@ -21,7 +21,8 @@ CORS(app,
          "allow_private_network": True
      }},
      always_send=True,  # Always send CORS headers
-     automatic_options=True  # Handle OPTIONS automatically
+     automatic_options=True,  # Handle OPTIONS automatically
+     intercept_exceptions=True  # Add CORS headers to error responses
 )
 
 # Set absolute paths for template and static folders

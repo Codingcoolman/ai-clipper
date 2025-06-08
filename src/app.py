@@ -37,8 +37,9 @@ def add_cors_headers(response):
     """Add CORS headers to all responses"""
     response.headers['Access-Control-Allow-Origin'] = 'https://init-12295.web.app'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept, Origin'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Max-Age'] = '3600'
     return response
 
 @app.after_request
@@ -683,22 +684,30 @@ def serve_clip(filename):
         logger.error(f"Error serving clip {filename}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/progress/<task_id>')
+@app.route('/progress/<task_id>', methods=['GET', 'OPTIONS'])
 def get_progress(task_id):
-    """Get the progress of a task"""
-    with task_lock:
-        if task_id not in task_progress:
-            return jsonify({
-                'error': 'Task not found'
-            }), 404
-            
-        task_data = task_progress[task_id]
-        return jsonify({
-            'progress': task_data['progress'],
-            'total_progress': task_data.get('total_progress', 0),
-            'status': task_data['status'],
-            'eta': task_data['eta']
+    """Get progress for a specific task"""
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        return add_cors_headers(response)
+
+    try:
+        # Get the progress from the global dictionary
+        progress = task_progress.get(task_id, {
+            'status': 'not_found',
+            'progress': 0,
+            'message': 'Task not found'
         })
+        
+        response = jsonify(progress)
+        return add_cors_headers(response)
+    except Exception as e:
+        logger.error(f"Error getting progress for task {task_id}: {str(e)}")
+        response = jsonify({
+            'status': 'error',
+            'message': f'Error getting progress: {str(e)}'
+        }), 500
+        return add_cors_headers(response)
 
 @app.route('/process', methods=['POST', 'OPTIONS'])
 def process_video():
@@ -904,6 +913,24 @@ def get_video_length(video_path: str) -> float:
     except Exception as e:
         print(f"Error getting video length: {e}")
         return 180  # Default to 3 minutes if we can't get the length
+
+@app.errorhandler(500)
+def internal_error(error):
+    response = jsonify({
+        'status': 'error',
+        'message': 'Internal server error',
+        'error': str(error)
+    }), 500
+    return add_cors_headers(response)
+
+@app.errorhandler(404)
+def not_found_error(error):
+    response = jsonify({
+        'status': 'error',
+        'message': 'Not found',
+        'error': str(error)
+    }), 404
+    return add_cors_headers(response)
 
 if __name__ == '__main__':
     app.run(debug=True) 
